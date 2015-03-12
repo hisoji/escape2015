@@ -1,6 +1,48 @@
 #pragma once
 #include<Siv3D.hpp>
 
+class MyCamera
+{
+public:
+	MyCamera(){}
+
+	void update(const Point& playerPos, const Point& mapSize){
+		Point pos = -Point((1280 - 128) / 2, 720 / 5 * 3) + playerPos;/*プレイヤー位置からカメラを引いたもの*/
+
+		//以下カメラの位置調整(左上基準?)
+		if (pos.x<0){
+			pos.x = 0;
+		}
+		if (pos.x + 1280 > mapSize.x){
+			pos.x = mapSize.x - 1280;
+		}
+		if (pos.y<0){
+			pos.y = 0;
+		}
+		if (pos.y + 720>mapSize.y){
+			pos.y = mapSize.y - 720;
+		}
+
+		m_camerapos = pos;
+	}
+
+	Point getCameraPos()const{
+		return m_camerapos;
+	}
+private:
+	Point m_camerapos = Point(0,0);
+};
+
+class Event{
+	//mapName:cave,temple,...  stageName:stage03,...
+	void loadEvent(const String& mapName, const String& stageName){
+		const CSVReader csv(L"data/Elis/Event/" + mapName + L"/" + stageName + L".csv");
+		if (!csv){
+			LOG_ERROR(L"見つからないcsvファイル:",csv.path);
+			return;
+		}
+	}
+};
 
 enum class FloorType{
 	NormalFloor,
@@ -16,17 +58,26 @@ public:
 
 	}
 	void init(){
-		loadStage(L"yume", L"stage00");
+		loadStage(L"cave", L"stage00");
+		//loadStage(L"yume", L"stage00");
 	}
 	void update(){}
-	void draw()const{
-		Point pos = Point(0, 0);
-		m_texMap(pos.x, pos.y, SCREEN_SIZE.x, SCREEN_SIZE.y).draw();
+	void draw(const Point& offset = { 0, 0 })const{
+		m_texMap(offset.x, offset.y, SCREEN_SIZE.x, SCREEN_SIZE.y).draw();
+	}
+
+	//メインから戻る時の処理
+	void updateReturn(){
+		SoundAsset(m_bgmAsset).stop();
 	}
 
 	void loadStage(const String& name, const String& stageName){
 		m_imageTerrain = Image(L"data/Elis/Map/" + name + L"/" + stageName + L"_terrain.png");
 		m_texMap = Texture(L"data/Elis/Map/" + name + L"/" + stageName + L"_map.png");
+
+		m_bgmAsset = L"ELBGMtower";
+
+		SoundAsset(m_bgmAsset).play();
 	}
 	bool isFloor(int x, int y)const{
 		return m_imageTerrain[y][x] != Palette::White;
@@ -65,9 +116,14 @@ public:
 		return false;
 	}
 
+	Point getMapSize()const{
+		return m_imageTerrain.size;
+	}
+
 private:
 	Texture m_texMap;
-	Image m_imageTerrain;
+	Image m_imageTerrain; //地形衝突用の画像
+	String m_bgmAsset;
 };
 
 class Player{
@@ -94,10 +150,9 @@ public:
 		move();
 		++m_frameCount;
 	}
-	void draw()const{
-		const Point cameraPos = Mouse::Pos();
+	void draw(const Point& camerapos = { 0, 0 })const{
 		const int kAnimeTiming = 31;
-		const Point pos = elisRect.pos - Point(0,0);
+		const Point pos = elisRect.pos - camerapos;
 		const double x = (face == Face::Left) ? 0 : 128;
 		const double y = 128;
 		const double w = elisRect.w;
@@ -126,12 +181,15 @@ public:
 	Point headCollisionPos()const{
 		return Point(elisRect.center.x, elisRect.y + 50);
 	}
+	Point getPlayerPos()const {
+		return elisRect.pos;
+	}
 
 	void moveChara(const Point& p){
 		elisRect.moveBy(p);
 	}
 
-	Point nextVec;//次に動くベクトル
+	Point nextVec;//次に動くベクトル。maingameで使ってる
 
 	struct JumpInfo{
 		bool jumping = false;
@@ -219,16 +277,41 @@ public:
 	void update(){
 		player.update();
 		if (Input::KeyEnter.clicked){
+			map.updateReturn();
 			ChangeScene(GameState::StageSelect);
 		}
 		intersectPlayertoMap();
+
+		camera.update(player.getPlayerPos(), map.getMapSize());
 	}
 	void draw()const{
 		fn.drawCenter(L"戦え\n\n[Enter]戻る", SCREEN_SIZE / 2);
-		map.draw();
-		player.draw();
+		const Point& p = camera.getCameraPos();
+		map.draw(p);
+		player.draw(p);
 	}
 private:
+	void intersectPlayertoMap(){
+		moveX();
+		jump();
+		passFloor();
+		fall();
+		identify();
+	}
+
+	void passFloor(){
+		const Point head = player.headCollisionPos();
+		const Point foot = player.footCollisionPos();
+
+		if (player.keyDown.clicked
+			&& map.isFloor(foot.x, foot.y)
+			&& map.getFloorType(foot.x, foot.y) == FloorType::PassFloor)//
+		{
+			player.moveChara({ 0, 1 });
+		}
+
+	}
+
 	void moveX(){
 		Point foot = player.footCollisionPos();
 		Point head = player.headCollisionPos();
@@ -337,19 +420,9 @@ private:
 		}
 		player.elisState = Player::ElisState::Staying;
 	}
-
-	void intersectPlayertoMap(){
-		moveX();
-
-		jump();
-
-		fall();
-
-
-		identify();
-	}
 	
 	Map map;
 	Player player;
+	MyCamera camera;
 	Font fn = Font(30, Typeface::Heavy);
 };

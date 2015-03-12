@@ -31,7 +31,7 @@ double fadeOutTime(){
 }
 void blackFade(const TimerMillisec &timer)
 {
-	const unsigned alpha = static_cast<unsigned>(255.0*timer.elapsed() / fadeOutTime());
+	const int alpha = Min(static_cast<int>(255*timer.elapsed() / fadeOutTime()), 255);
 	Rect(0, 0, 1280, 720).draw(Color(0, 0, 0, alpha));
 }
 
@@ -509,13 +509,17 @@ public:
 		Window::SetTitle(L" Elis");
 
 		initState(g_gameData.gameState);
+		nowState = g_gameData.gameState;
 		return true;
 	}
 
 	void update(){
-		const GameState oldState = g_gameData.gameState;
+		if (nowState != g_gameData.gameState){
+			initState(g_gameData.gameState);
+			nowState = g_gameData.gameState;
+		}
 
-		switch (g_gameData.gameState)
+		switch (nowState)
 		{
 		case GameState::Loading:
 			m_loading.update();
@@ -532,13 +536,9 @@ public:
 		default:
 			break;
 		}
-
-		if (g_gameData.gameState != oldState){
-			initState(g_gameData.gameState);
-		}
 	}
 	void draw()const{
-		switch (g_gameData.gameState){
+		switch (nowState){
 		case GameState::Loading:
 			m_loading.draw();
 			break;
@@ -577,6 +577,7 @@ public:
 	}
 
 private:
+	GameState nowState;
 	Loading m_loading;
 	Title m_title;
 	StageSelect m_stageSelect;
