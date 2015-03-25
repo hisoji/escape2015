@@ -57,8 +57,8 @@ public:
 	Map(){
 
 	}
-	void init(){
-		loadStage(L"cave", L"stage00");
+	void init(String mapName,String stageName){
+		loadStage(mapName, stageName);
 		//loadStage(L"yume", L"stage00");
 	}
 	void update(){}
@@ -71,9 +71,9 @@ public:
 		SoundAsset(m_bgmAsset).stop();
 	}
 
-	void loadStage(const String& name, const String& stageName){
-		m_imageTerrain = Image(L"data/Elis/Map/" + name + L"/" + stageName + L"_terrain.png");
-		m_texMap = Texture(L"data/Elis/Map/" + name + L"/" + stageName + L"_map.png");
+	void loadStage(const String& mapName, const String& stageName){
+		m_imageTerrain = Image(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
+		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
 
 		m_bgmAsset = L"ELBGMtower";
 
@@ -260,29 +260,72 @@ private:
 	}	
 };
 
+class EventManager{
+public:
+	EventManager(){}
+
+	//マップ内のイベントをロードする。マップに入った瞬間に呼ぶ。
+	void loadEvent(String name,String stageName){
+
+	}
+
+	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
+	void update(){
+
+	}
+
+	//イベント開始
+	void startEvent(){
+	}
+
+	//発生するイベントがあるか。trueならイベントモードに移る
+	bool hasEvent(){
+		return false;//とりあえずfalse
+	}
+
+	//イベントが終わったか。trueなら通常のモードに移る
+	bool isEnd(){
+		return true;//とりあえずtrue
+	}
+};
 
 class MainGame{
 	enum class State{
 		Playing,
-		EditMagic,
-		GameOver,
 		Event,
-		Clear,
 	};
 public:
 	void init(){
 		player.init();
-		map.init();
+		map.init(g_gameData.mapName,g_gameData.stageName);
 	}
 	void update(){
-		player.update();
-		if (Input::KeyEnter.clicked){
-			map.updateReturn();
-			ChangeScene(GameState::StageSelect);
-		}
-		intersectPlayertoMap();
+		switch (state){
+		case State::Playing:
+			player.update();
+			if (Input::KeyEnter.clicked){
+				map.updateReturn();
+				ChangeScene(GameState::StageSelect);
+			}
+			intersectPlayertoMap();
+			camera.update(player.getPlayerPos(), map.getMapSize());
 
-		camera.update(player.getPlayerPos(), map.getMapSize());
+			//何か発生イベントが起こるならイベント遷移
+			if (eventManager.hasEvent()){
+				state = State::Event;
+				eventManager.startEvent();
+			}
+			break;
+
+		case State::Event:
+			eventManager.update();
+
+			//イベントが終わったら通常の状態に戻る
+			if (eventManager.isEnd()){
+				state = State::Playing;
+			}
+			break;
+		}
 	}
 	void draw()const{
 		fn.drawCenter(L"戦え\n\n[Enter]戻る", SCREEN_SIZE / 2);
@@ -420,9 +463,13 @@ private:
 		}
 		player.elisState = Player::ElisState::Staying;
 	}
-	
+
+
+	State state = State::Playing;
+
 	Map map;
 	Player player;
 	MyCamera camera;
+	EventManager eventManager;
 	Font fn = Font(30, Typeface::Heavy);
 };

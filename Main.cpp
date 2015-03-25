@@ -16,7 +16,7 @@ struct GameData{
 	GameState gameState = GameState::Loading;
 	bool isRightHand = true;
 
-	String mapName;
+	String mapName = L"cave";
 	String stageName = L"stage00";
 };
 
@@ -31,7 +31,7 @@ double fadeOutTime(){
 }
 void blackFade(const TimerMillisec &timer)
 {
-	const int alpha = Min(static_cast<int>(255*timer.elapsed() / fadeOutTime()), 255);
+	const int alpha = Min(static_cast<int>(255 * timer.elapsed() / fadeOutTime()), 255);
 	Rect(0, 0, 1280, 720).draw(Color(0, 0, 0, alpha));
 }
 
