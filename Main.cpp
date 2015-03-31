@@ -55,6 +55,7 @@ public:
 private:
 	int frame = 0;
 	Font fn = Font(20, Typeface::Thin);
+
 	void load(){
 		//Title
 		TextureAsset::Register(L"texElisTitle", L"data/Elis/Title/title.png");
@@ -143,6 +144,7 @@ private:
 
 		//map
 		SoundAsset::Register(L"ELSEdoor", L"data/Elis/SE/System/door.mp3");
+
 		SoundAsset::Register(L"ELBGMtower", L"data/Elis/BGM/tower.mp3");
 		SoundAsset::Register(L"ELBGMpalace", L"data/Elis/BGM/palace.mp3");
 		SoundAsset::Register(L"ELBGMfortress", L"data/Elis/BGM/fortress.mp3");
@@ -164,8 +166,17 @@ private:
 		TextureAsset::Register(L"ELlogobossbattle", L"data/Elis/Map/logoBossbattle.png");
 
 		SoundAsset::Register(L"ELSEstage_start", L"data/Elis/SE/System/stage_start.mp3");
-
 		SoundAsset::Register(L"ELSEbossbattle_start", L"data/Elis/SE/System/bossbattle_start.mp3");
+
+		//item
+		const String itemPath = L"data/Elis/Item/";
+		TextureAsset::Register(L"texELLifeUpS", itemPath + L"lifeUpS.png");
+		TextureAsset::Register(L"texELLifeUpM", itemPath + L"lifeUpM.png");
+		TextureAsset::Register(L"texELLifeUpL", itemPath + L"lifeUpL.png");
+
+		TextureAsset::Register(L"texELMagicUpS", itemPath + L"magicUpS.png");
+		TextureAsset::Register(L"texELMagicUpM", itemPath + L"magicUpM.png");
+		TextureAsset::Register(L"texELMagicUpL", itemPath + L"magicUpL.png");
 
 	}
 };
@@ -587,6 +598,7 @@ private:
 void Main()
 {
 	Elis elis;
+
 
 	if (!elis.init()){
 		return;

@@ -33,17 +33,6 @@ private:
 	Point m_camerapos = Point(0,0);
 };
 
-class Event{
-	//mapName:cave,temple,...  stageName:stage03,...
-	void loadEvent(const String& mapName, const String& stageName){
-		const CSVReader csv(L"data/Elis/Event/" + mapName + L"/" + stageName + L".csv");
-		if (!csv){
-			LOG_ERROR(L"見つからないcsvファイル:",csv.path);
-			return;
-		}
-	}
-};
-
 enum class FloorType{
 	NormalFloor,
 	PassFloor,
@@ -289,6 +278,94 @@ public:
 	}
 };
 
+
+
+struct Item{
+	enum class Type{
+		Key,
+		Scissor,
+	};
+	static String GetItemAssetName(Item::Type type){
+		switch (type){
+		case Item::Type::Key:
+			return L"texELMagicUpM";
+		default:
+			return L"texELMagicUpS";
+		}
+	}
+
+	Item(Type t,Point pos){
+		type = t;
+		assetName = GetItemAssetName(t);
+		erased = false;
+		switch (t){
+		case Type::Key:
+			rect.size = { 20, 20 };
+			break;
+		default:
+			rect.size = { 20, 20 };
+			break;
+		}
+		rect.setCenter(pos);
+	}
+
+	Type type;
+	Rect rect;
+	String assetName;
+	bool erased;//消す時にtrue
+};
+
+
+
+class ItemManager{
+public:
+	Array<Item> items;
+
+	void loadItem(const String& mapName, const String& stageName){
+		items.clear();
+
+		items.push_back({ Item::Type::Key, { 600, 500 } });
+		items.push_back({ Item::Type::Scissor, { 800, 500 } });
+	}
+	void update(){
+		Erase_if(items, [](const Item& i){
+			return i.erased;
+		});
+	}
+
+	Optional<Item::Type> findItem(const Rect& playerRect = { 0, 0, 0, 0 }){
+		for (Item& i : items){
+			if (i.rect.intersects(playerRect)){
+				i.erased = true;
+				return i.type;
+			}
+		}
+		return none;
+	}
+
+	void draw(const Point& offset = { 0, 0 })const{	
+		for (const Item &item : items){
+			if (isInCamera(item.rect.center, offset))
+			{
+				const Point p = item.rect.center - offset;
+				TextureAsset(item.assetName).drawAt(p);
+			}
+		}
+	}
+
+private:
+	bool isInCamera(const Point& pos, const Point& camerapos)const
+	{
+		const int kXoffset = 300;
+		const int kYoffset = 300;
+
+		return pos.x > camerapos.x - kXoffset
+			&& pos.x < camerapos.x + 1280 + kXoffset
+			&& pos.y > camerapos.y - kYoffset
+			&& pos.y <camerapos.y + 720 + kYoffset;
+	}
+};
+
 class MainGame{
 	enum class State{
 		Playing,
@@ -298,6 +375,7 @@ public:
 	void init(){
 		player.init();
 		map.init(g_gameData.mapName,g_gameData.stageName);
+		itemManager.loadItem(g_gameData.mapName, g_gameData.stageName);
 	}
 	void update(){
 		switch (state){
@@ -309,6 +387,11 @@ public:
 			}
 			intersectPlayertoMap();
 			camera.update(player.getPlayerPos(), map.getMapSize());
+
+			itemManager.update();
+			if (auto p = itemManager.findItem(player.elisRect)){
+				havingItems.push_back(p.value());
+			}
 
 			//何か発生イベントが起こるならイベント遷移
 			if (eventManager.hasEvent()){
@@ -332,6 +415,16 @@ public:
 		const Point& p = camera.getCameraPos();
 		map.draw(p);
 		player.draw(p);
+		itemManager.draw(p);
+
+
+		for (size_t i = 0; i < 8; ++i){
+			const Point p = { 100 + 70 * i, 50 };
+			Rect(50, 50).setCenter(p).draw(Palette::White);
+			if (i < havingItems.size()){
+				TextureAsset(Item::GetItemAssetName(havingItems[i])).drawAt(p);
+			}
+		}
 	}
 private:
 	void intersectPlayertoMap(){
@@ -471,5 +564,8 @@ private:
 	Player player;
 	MyCamera camera;
 	EventManager eventManager;
+	ItemManager itemManager;
 	Font fn = Font(30, Typeface::Heavy);
+
+	Array<Item::Type> havingItems;
 };
