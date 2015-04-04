@@ -372,6 +372,7 @@ struct EventInfo
 	Rect eventArea;
 	String filename;
 	EventType type;
+	bool readed = false;//自動イベントが連続で表示されるのを防ぐための応急処置
 };
 
 class EventManager
@@ -400,11 +401,19 @@ public:
 		}
 		*/
 
-		EventInfo item;
-		item.eventArea = Rect(832 - 50, 686 - 100, 100, 100);
-		item.filename = L"test";
-		item.type = EventType::TalkEvent;
-		m_events.push_back(item);
+		//会話イベントの試作
+		EventInfo item1;
+		item1.eventArea = Rect(832 - 50, 686 - 100, 100, 100);
+		item1.filename = L"test";
+		item1.type = EventType::TalkEvent;
+		m_events.push_back(item1);
+
+		//自動イベントの試作
+		EventInfo item2;
+		item2.eventArea = Rect(1032 - 50, 686 - 100, 100, 100);
+		item2.filename = L"unko";
+		item2.type = EventType::AutoEvent;
+		m_events.push_back(item2);
 	}
 
 	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
@@ -439,12 +448,18 @@ public:
 					m_eventIndex = i;
 					break;
 				}
-				else if (m_events[i].type == EventType::AutoEvent)
+				else if (m_events[i].type == EventType::AutoEvent
+					&& !m_events[i].readed)
 				{
 					flag = true;
 					m_eventIndex = i;
+					m_events[i].readed = true;
 					break;
 				}
+			}
+			else if (m_events[i].type == EventType::AutoEvent)//重なっているとき連続で出ないようにするための処置
+			{
+				m_events[i].readed = false;
 			}
 		}
 		return flag;//false;//イベントが発生したらtrue,そうでないならfalse
