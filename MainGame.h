@@ -62,8 +62,8 @@ public:
 
 	void loadStage(const String& mapName, const String& stageName){
 		m_imageTerrain = Image(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
-		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
-
+		//m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
+		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
 		m_bgmAsset = L"ELBGMtower";
 
 		SoundAsset(m_bgmAsset).play();
@@ -131,8 +131,8 @@ public:
 		Dead,
 	};
 
-	void init(){
-
+	void init(Point playerPos = { 100, 500 }){
+		elisRect.setCenter(playerPos);
 	}
 	void update(){
 		nextVec = { 0, 0 };
@@ -178,6 +178,10 @@ public:
 		elisRect.moveBy(p);
 	}
 
+	Rect getRect(){
+		return elisRect;
+	}
+
 	Point nextVec;//次に動くベクトル。maingameで使ってる
 
 	struct JumpInfo{
@@ -207,6 +211,7 @@ public:
 	const int kMaxJumpH = 27;//ジャンプ初速度
 	const int kDrop = 1;//ジャンプ速度の減少度兼重力加速度
 	const int kGravity0 = 5;
+
 
 private:
 	void move(){
@@ -242,43 +247,9 @@ private:
 			jumpInfo.jumping = true;
 		}
 		
-		
-
-
 		elisState = next;
 	}	
 };
-
-class EventManager{
-public:
-	EventManager(){}
-
-	//マップ内のイベントをロードする。マップに入った瞬間に呼ぶ。
-	void loadEvent(String name,String stageName){
-
-	}
-
-	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
-	void update(){
-
-	}
-
-	//イベント開始
-	void startEvent(){
-	}
-
-	//発生するイベントがあるか。trueならイベントモードに移る
-	bool hasEvent(){
-		return false;//とりあえずfalse
-	}
-
-	//イベントが終わったか。trueなら通常のモードに移る
-	bool isEnd(){
-		return true;//とりあえずtrue
-	}
-};
-
-
 
 struct Item{
 	enum class Type{
@@ -315,8 +286,6 @@ struct Item{
 	bool erased;//消す時にtrue
 };
 
-
-
 class ItemManager{
 public:
 	Array<Item> items;
@@ -324,8 +293,8 @@ public:
 	void loadItem(const String& mapName, const String& stageName){
 		items.clear();
 
-		items.push_back({ Item::Type::Key, { 600, 500 } });
-		items.push_back({ Item::Type::Scissor, { 800, 500 } });
+		items.push_back({ Item::Type::Key, { 600, 600 } });
+		items.push_back({ Item::Type::Scissor, { 800, 600 } });
 	}
 	void update(){
 		Erase_if(items, [](const Item& i){
@@ -366,6 +335,142 @@ private:
 	}
 };
 
+
+struct Door{
+public:
+	Door(Point _pos,Item::Type type)
+		:hitRect(_pos,50,80),openType(type){}
+	void draw(const Point& p)const{
+		hitRect.movedBy(-p).draw(Palette::Blue);
+	}
+
+	bool isTouchable(const Point& head, const Point& foot)const{
+		int n = std::abs(foot.y - head.y);
+		for (int i = 0; i <= n; ++i)
+		{
+			if (Point(foot.x, foot.y - i).intersects(hitRect))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	Rect hitRect;
+	Item::Type openType;
+};
+
+enum EventType
+{
+	TalkEvent,
+	AutoEvent,
+	Num,
+};
+
+struct EventInfo
+{
+	Rect eventArea;
+	String filename;
+	EventType type;
+};
+
+class EventManager
+{
+private:
+	std::vector< EventInfo > m_events;
+	bool m_isEventEnd = false;
+	Font m_TalkFont = Font(30, Typeface::Default);
+	int m_eventIndex = 0;
+public:
+	EventManager(){}
+
+	//マップ内のイベントをロードする。マップに入った瞬間に呼ぶ。
+	void loadEvent(String stageName)
+	{
+		/*
+		//①data/Elis/event/mapname/stageName.csv
+		CSVReader csv(L"data/Elis/Event/cave/stage00.csv");
+
+		for (int y=0;y = csv.rows;++y)
+		{
+		EventInfo item;
+
+		item.filename = csv.get<String>(y, 0).lower();
+
+		}
+		*/
+
+		EventInfo item;
+		item.eventArea = Rect(832 - 50, 686 - 100, 100, 100);
+		item.filename = L"test";
+		item.type = EventType::TalkEvent;
+		m_events.push_back(item);
+	}
+
+	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
+	void update()
+	{
+		if (Input::KeyZ.clicked)
+		{
+			m_isEventEnd = true;
+		}
+	}
+
+	//イベント開始
+	void startEvent()
+	{
+		m_isEventEnd = false;
+	}
+
+	//発生するイベントがあるか。trueならイベントモードに移る
+	bool hasEvent(const Rect& playerRect, bool isClickedTalkButton)
+	{
+		bool flag = false;
+
+		for (size_t i = 0; i < m_events.size(); ++i)
+		{
+			if (m_events[i].eventArea.intersects(playerRect))
+			{
+				if (m_events[i].type == EventType::TalkEvent
+					&& isClickedTalkButton
+					)
+				{
+					flag = true;
+					m_eventIndex = i;
+					break;
+				}
+				else if (m_events[i].type == EventType::AutoEvent)
+				{
+					flag = true;
+					m_eventIndex = i;
+					break;
+				}
+			}
+		}
+		return flag;//false;//イベントが発生したらtrue,そうでないならfalse
+	}
+
+	//イベントが終わったか。trueなら通常のモードに移る
+	bool isEnd(){
+		return m_isEventEnd;//event終了ならtrueを返す
+	}
+
+	void drawCharacter(const Point& cameraOffset) const
+	{
+		for (size_t i = 0; i < m_events.size(); ++i)
+		{
+			Rect(m_events[i].eventArea.pos - cameraOffset, m_events[i].eventArea.size).draw(Palette::Blue);
+		}
+	}
+
+	void drawEvent() const
+	{
+		Rect(50, 50, 1180, 300).draw();
+		m_TalkFont(m_events[m_eventIndex].filename).draw(100, 100, Palette::Black);
+		//LOG_ERROR(m_events[m_eventIndex].filename);
+	}
+};
+
 class MainGame{
 	enum class State{
 		Playing,
@@ -373,9 +478,12 @@ class MainGame{
 	};
 public:
 	void init(){
-		player.init();
+		player.init({ 100, 1000 });
 		map.init(g_gameData.mapName,g_gameData.stageName);
 		itemManager.loadItem(g_gameData.mapName, g_gameData.stageName);
+		eventManager.loadEvent(g_gameData.stageName);
+
+		doors.push_back(Door({ 800, 800 }, Item::Type::Key));
 	}
 	void update(){
 		switch (state){
@@ -394,7 +502,7 @@ public:
 			}
 
 			//何か発生イベントが起こるならイベント遷移
-			if (eventManager.hasEvent()){
+			if (eventManager.hasEvent(player.getRect(),Input::KeyZ.clicked)){
 				state = State::Event;
 				eventManager.startEvent();
 			}
@@ -416,8 +524,21 @@ public:
 		map.draw(p);
 		player.draw(p);
 		itemManager.draw(p);
+		eventManager.drawCharacter(p);
+		if (state == State::Event){
+			eventManager.drawEvent();
+		}
+		
+		/*
+		for (const Door& d : doors){
+			d.draw(p);
+		}
+		*/
 
-
+		drawItemInventory();
+	}
+private:
+	void drawItemInventory()const{
 		for (size_t i = 0; i < 8; ++i){
 			const Point p = { 100 + 70 * i, 50 };
 			Rect(50, 50).setCenter(p).draw(Palette::White);
@@ -426,7 +547,7 @@ public:
 			}
 		}
 	}
-private:
+
 	void intersectPlayertoMap(){
 		moveX();
 		jump();
@@ -527,7 +648,7 @@ private:
 	}
 
 	void identify(){
-		//identify
+		//identifyに関する部分
 		const Point foot = player.footCollisionPos();
 		const Point head = player.headCollisionPos();
 		if (map.isFloor(foot.x, foot.y)== false || player.jumpInfo.m_jumpH - player.m_gravity >0)//
@@ -566,6 +687,8 @@ private:
 	EventManager eventManager;
 	ItemManager itemManager;
 	Font fn = Font(30, Typeface::Heavy);
+
+	Array<Door> doors;
 
 	Array<Item::Type> havingItems;
 };
