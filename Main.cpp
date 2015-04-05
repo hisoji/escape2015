@@ -57,6 +57,7 @@ private:
 	Font fn = Font(20, Typeface::Thin);
 
 	void load(){
+		FontAsset::Register(L"debugfont", 10,Typeface::Default);
 		//Title
 		TextureAsset::Register(L"texElisTitle", L"data/Elis/Title/title.png");
 		TextureAsset::Register(L"texElisNewgame", L"data/Elis/Title/newgame.png");
@@ -153,6 +154,8 @@ private:
 		SoundAsset::Register(L"ELBGMlastboss1", L"data/Elis/BGM/lastboss1.mp3");
 		SoundAsset::Register(L"ELBGMtutorial", L"data/Elis/BGM/tutorial.mp3");
 		SoundAsset::Register(L"ELBGMbossbattle", L"data/Elis/BGM/bossbattle.mp3");
+
+		SoundAsset::Register(L"ELBGMrain", L"data/tampi012.mp3");
 
 
 		TextureAsset::Register(L"ELlogotower", L"data/Elis/Map/logo/tower.png");

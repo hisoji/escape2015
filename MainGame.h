@@ -29,7 +29,12 @@ public:
 	Point getCameraPos()const{
 		return m_camerapos;
 	}
+	void debug()const{
+		const Point m = Mouse::Pos();
+		FontAsset(L"debugfont").draw(Format(m + m_camerapos), m, Palette::Black);
+	}
 private:
+	
 	Point m_camerapos = Point(0,0);
 };
 
@@ -64,7 +69,7 @@ public:
 		m_imageTerrain = Image(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
 		//m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
 		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
-		m_bgmAsset = L"ELBGMtower";
+		m_bgmAsset = L"ELBGMrain";
 
 		SoundAsset(m_bgmAsset).play();
 	}
@@ -341,7 +346,9 @@ public:
 	Door(Point _pos,Item::Type type)
 		:hitRect(_pos,50,80),openType(type){}
 	void draw(const Point& p)const{
-		hitRect.movedBy(-p).draw(Palette::Blue);
+		if (isVisible){
+			hitRect.movedBy(-p).draw(Palette::Blue);
+		}
 	}
 
 	bool isTouchable(const Point& head, const Point& foot)const{
@@ -358,6 +365,7 @@ public:
 
 	Rect hitRect;
 	Item::Type openType;
+	bool isVisible = false;
 };
 
 enum EventType
@@ -403,15 +411,15 @@ public:
 
 		//会話イベントの試作
 		EventInfo item1;
-		item1.eventArea = Rect(832 - 50, 686 - 100, 100, 100);
-		item1.filename = L"test";
+		item1.eventArea = Rect(500, 200, 100, 100);
+		item1.filename = L"あなたの意思無くしては動くことが出来ない";
 		item1.type = EventType::TalkEvent;
 		m_events.push_back(item1);
 
 		//自動イベントの試作
 		EventInfo item2;
-		item2.eventArea = Rect(1032 - 50, 686 - 100, 100, 100);
-		item2.filename = L"unko";
+		item2.eventArea = Rect(700, 200, 100, 100);
+		item2.filename = L"全て自動で行ってくれる";
 		item2.type = EventType::AutoEvent;
 		m_events.push_back(item2);
 	}
@@ -474,7 +482,8 @@ public:
 	{
 		for (size_t i = 0; i < m_events.size(); ++i)
 		{
-			Rect(m_events[i].eventArea.pos - cameraOffset, m_events[i].eventArea.size).draw(Palette::Blue);
+			//Rect(m_events[i].eventArea.pos - cameraOffset, m_events[i].eventArea.size)(TextureAsset(L"texElisNormal")(0,0,128,128)).draw();
+			TextureAsset(L"texElisNormal")(0, 0, 128, 128).drawAt(m_events[i].eventArea.pos - cameraOffset);
 		}
 	}
 
@@ -493,33 +502,53 @@ class MainGame{
 	};
 public:
 	void init(){
-		player.init({ 100, 1000 });
-		map.init(g_gameData.mapName,g_gameData.stageName);
-		itemManager.loadItem(g_gameData.mapName, g_gameData.stageName);
-		eventManager.loadEvent(g_gameData.stageName);
+		const String mn = g_gameData.mapName;
+		const String sn = g_gameData.stageName;
+		player.init({ 100, 100 });
+		map.init(mn,sn);
+		itemManager.loadItem(mn,sn);
+		eventManager.loadEvent(sn);
 
-		doors.push_back(Door({ 800, 800 }, Item::Type::Key));
+		doors.push_back(Door({ 1300, 200 }, Item::Type::Scissor));
 	}
 	void update(){
 		switch (state){
 		case State::Playing:
-			player.update();
-			if (Input::KeyEnter.clicked){
-				map.updateReturn();
-				ChangeScene(GameState::StageSelect);
-			}
-			intersectPlayertoMap();
-			camera.update(player.getPlayerPos(), map.getMapSize());
+			if (mapMoving){
+				mapMoving = false;
 
-			itemManager.update();
-			if (auto p = itemManager.findItem(player.elisRect)){
-				havingItems.push_back(p.value());
+				player.elisRect.setCenter({ 300, 500 });
+				map.loadStage(g_gameData.mapName, L"stage01");
+				//itemManager.loadItem(mn, sn);
+				//eventManager.loadEvent(sn);
+				doors.push_back(Door({ 0, 200 }, Item::Type::Scissor));
 			}
+			else{
+				player.update();
+				if (Input::KeyEnter.clicked){
+					map.updateReturn();
+					ChangeScene(GameState::StageSelect);
+				}
+				intersectPlayertoMap();
+				camera.update(player.getPlayerPos(), map.getMapSize());
 
-			//何か発生イベントが起こるならイベント遷移
-			if (eventManager.hasEvent(player.getRect(),Input::KeyZ.clicked)){
-				state = State::Event;
-				eventManager.startEvent();
+				itemManager.update();
+				if (auto p = itemManager.findItem(player.elisRect)){
+					SoundAsset(L"sndELGetItem").playMulti();
+					havingItems.push_back(p.value());
+				}
+
+				//何か発生イベントが起こるならイベント遷移
+				if (eventManager.hasEvent(player.getRect(), Input::KeyZ.clicked)){
+					state = State::Event;
+					eventManager.startEvent();
+				}
+
+				for (Door& d : doors){
+					if (d.hitRect.intersects(player.elisRect)){
+						mapMoving = true;
+					}
+				}
 			}
 			break;
 
@@ -540,17 +569,16 @@ public:
 		player.draw(p);
 		itemManager.draw(p);
 		eventManager.drawCharacter(p);
-		if (state == State::Event){
-			eventManager.drawEvent();
-		}
-		
-		/*
+
 		for (const Door& d : doors){
 			d.draw(p);
 		}
-		*/
 
+		if (state == State::Event){
+			eventManager.drawEvent();
+		}
 		drawItemInventory();
+		camera.debug();
 	}
 private:
 	void drawItemInventory()const{
@@ -703,6 +731,7 @@ private:
 	ItemManager itemManager;
 	Font fn = Font(30, Typeface::Heavy);
 
+	bool mapMoving = false;
 	Array<Door> doors;
 
 	Array<Item::Type> havingItems;
