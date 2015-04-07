@@ -1,6 +1,10 @@
 #pragma once
 #include<Siv3D.hpp>
 
+void SetRectBottom(Rect& r, Point p){
+	r.setPos(p - Point(r.w / 2, r.h));
+}
+
 class MyCamera
 {
 public:
@@ -52,8 +56,7 @@ public:
 
 	}
 	void init(String mapName,String stageName){
-		loadStage(mapName, stageName);
-		//loadStage(L"yume", L"stage00");
+		loadStage(mapName, stageName);;
 	}
 	void update(){}
 	void draw(const Point& offset = { 0, 0 })const{
@@ -67,9 +70,16 @@ public:
 
 	void loadStage(const String& mapName, const String& stageName){
 		m_imageTerrain = Image(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
-		//m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
-		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
+		m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_map.png");
+		//m_texMap = Texture(L"data/Elis/Map/" + mapName + L"/" + stageName + L"_terrain.png");
 		m_bgmAsset = L"ELBGMrain";
+
+		if (!m_imageTerrain){
+			LOG_ERROR(L"テラインが読み込まれていません Map::loadStage\n");
+		}
+		if (!m_texMap){
+			LOG_ERROR(L"マップ画像が読み込まれていません Map::loadStage\n");
+		}
 
 		SoundAsset(m_bgmAsset).play();
 	}
@@ -167,6 +177,7 @@ public:
 			TextureAsset(L"texElisJump")(x, y, w, h).draw(pos, Alpha(a));
 			break;
 		}
+		Rect(pos,w,h).draw({ Palette::Black, 100 });
 	}
 
 	Point footCollisionPos()const{
@@ -293,8 +304,6 @@ struct Item{
 
 class ItemManager{
 public:
-	Array<Item> items;
-
 	void loadItem(const String& mapName, const String& stageName){
 		items.clear();
 
@@ -338,16 +347,21 @@ private:
 			&& pos.y > camerapos.y - kYoffset
 			&& pos.y <camerapos.y + 720 + kYoffset;
 	}
+
+	Array<Item> items;
 };
 
 
 struct Door{
 public:
-	Door(Point _pos,Item::Type type)
-		:hitRect(_pos,50,80),openType(type){}
+	Door(){}
+	Door(Point _pos,String nextStage,Point nextPoint)
+		:hitRect(_pos,50,80),nextStageName(nextStage),nextMapPoint(nextPoint),openType(Item::Type::Key){
+		SetRectBottom(hitRect, _pos);
+	}
 	void draw(const Point& p)const{
 		if (isVisible){
-			hitRect.movedBy(-p).draw(Palette::Blue);
+			hitRect.movedBy(-p).draw({ Palette::Yellow, 128 });
 		}
 	}
 
@@ -364,14 +378,45 @@ public:
 	}
 
 	Rect hitRect;
+	String nextStageName;
+	Point nextMapPoint;
 	Item::Type openType;
-	bool isVisible = false;
+	bool isVisible = true;
 };
+
+class Flags{
+public:
+	enum Type{
+		Started,
+		Num
+	};
+	Flags(){
+		for (size_t i = 0; i < Num; ++i){
+			list.push_back(false);
+		}
+	}
+	bool get(String str)const{
+		return list[strToType(str)];
+	}
+	void set(String str, bool b){
+		list[strToType(str)] = b;
+	}
+private:
+	Type strToType(String str)const{
+		if (str == L"started"){
+			return Started;
+		}
+		return Num;//error
+	}
+	Array<bool> list;
+};
+Flags flags;
 
 enum EventType
 {
 	TalkEvent,
 	AutoEvent,
+	AutoStart,
 	Num,
 };
 
@@ -380,15 +425,17 @@ struct EventInfo
 	Rect eventArea;
 	String filename;
 	EventType type;
+	String flagName = L"nothing";//条件となるフラグ名。nothingなら自動
 	bool readed = false;//自動イベントが連続で表示されるのを防ぐための応急処置
+	bool isVisible = true;
 };
 
 class EventManager
 {
 private:
-	std::vector< EventInfo > m_events;
+	Array< EventInfo > m_events;
 	bool m_isEventEnd = false;
-	Font m_TalkFont = Font(30, Typeface::Default);
+	Font m_TalkFont = Font(25, Typeface::Default);
 	int m_eventIndex = 0;
 public:
 	EventManager(){}
@@ -396,32 +443,40 @@ public:
 	//マップ内のイベントをロードする。マップに入った瞬間に呼ぶ。
 	void loadEvent(String stageName)
 	{
-		/*
-		//①data/Elis/event/mapname/stageName.csv
-		CSVReader csv(L"data/Elis/Event/cave/stage00.csv");
-
-		for (int y=0;y = csv.rows;++y)
-		{
-		EventInfo item;
-
-		item.filename = csv.get<String>(y, 0).lower();
-
+		m_events.clear();
+		CSVReader csv(L"data/Elis/Map/house/" + stageName + L".csv");
+		if (csv){
+			for (int y = 0; y < csv.rows; ++y)
+			{
+				if (csv.get<String>(y, 0) == L"event"){
+					EventInfo item;
+					item.filename = csv.get<String>(y, 1).lower();
+					item.type = EventType::TalkEvent;
+					item.eventArea = Rect(100, 128);
+					SetRectBottom(item.eventArea, { csv.get<int>(y, 2), csv.get<int>(y, 3) });
+					m_events.push_back(item);
+				}
+				else if (csv.get<String>(y, 0) == L"autoevent"){
+					EventInfo item;
+					item.filename = csv.get<String>(y, 1).lower();
+					item.type = EventType::AutoEvent;
+					item.eventArea = Rect(100, 128);
+					SetRectBottom(item.eventArea, { csv.get<int>(y, 2), csv.get<int>(y, 3) });
+					m_events.push_back(item);
+				}
+				else if (csv.get<String>(y, 0) == L"autostart"){//巨大な判定で強制的に触れさせる
+					EventInfo item;
+					item.filename = csv.get<String>(y, 1).lower();
+					item.flagName = csv.get<String>(y, 2).lower();
+					item.type = EventType::AutoStart;
+					item.eventArea = Rect(0,0,SCREEN_SIZE);
+					item.isVisible = false;
+					m_events.push_back(item);
+					
+				}
+			}
+			return;
 		}
-		*/
-
-		//会話イベントの試作
-		EventInfo item1;
-		item1.eventArea = Rect(500, 200, 100, 100);
-		item1.filename = L"あなたの意思無くしては動くことが出来ない";
-		item1.type = EventType::TalkEvent;
-		m_events.push_back(item1);
-
-		//自動イベントの試作
-		EventInfo item2;
-		item2.eventArea = Rect(700, 200, 100, 100);
-		item2.filename = L"全て自動で行ってくれる";
-		item2.type = EventType::AutoEvent;
-		m_events.push_back(item2);
 	}
 
 	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
@@ -464,6 +519,16 @@ public:
 					m_events[i].readed = true;
 					break;
 				}
+				else if (m_events[i].type == EventType::AutoStart
+					&& flags.get(m_events[i].flagName) == false)
+				{
+					flag = true;
+					m_eventIndex = i;
+					m_events[i].readed = true;
+
+					flags.set(m_events[i].flagName, true);
+					break;
+				}
 			}
 			else if (m_events[i].type == EventType::AutoEvent)//重なっているとき連続で出ないようにするための処置
 			{
@@ -482,14 +547,18 @@ public:
 	{
 		for (size_t i = 0; i < m_events.size(); ++i)
 		{
-			//Rect(m_events[i].eventArea.pos - cameraOffset, m_events[i].eventArea.size)(TextureAsset(L"texElisNormal")(0,0,128,128)).draw();
-			TextureAsset(L"texElisNormal")(0, 0, 128, 128).drawAt(m_events[i].eventArea.pos - cameraOffset);
+			if (m_events[i].isVisible){
+				TextureAsset(L"texElisNormal")(0, 0, 128, 128).drawAt(m_events[i].eventArea.center - cameraOffset);
+
+				Rect(m_events[i].eventArea.pos - cameraOffset, m_events[i].eventArea.size).draw({ Palette::Blue, 100 });
+			}
 		}
 	}
 
 	void drawEvent() const
 	{
-		Rect(50, 50, 1180, 300).draw();
+		Rect(50, 50, 1180, 300).draw(Palette::Lightslategray);
+		Rect(50, 50, 1180, 300).drawFrame(10.0, 0.0, Palette::Black);
 		m_TalkFont(m_events[m_eventIndex].filename).draw(100, 100, Palette::Black);
 		//LOG_ERROR(m_events[m_eventIndex].filename);
 	}
@@ -504,24 +573,29 @@ public:
 	void init(){
 		const String mn = g_gameData.mapName;
 		const String sn = g_gameData.stageName;
-		player.init({ 100, 100 });
+		nowMapName = mn;
+		nowStageName = sn;
+		player.init({ 200, 500 });
 		map.init(mn,sn);
 		itemManager.loadItem(mn,sn);
 		eventManager.loadEvent(sn);
 
-		doors.push_back(Door({ 1300, 200 }, Item::Type::Scissor));
+		loadDoors(nowStageName);
 	}
 	void update(){
 		switch (state){
 		case State::Playing:
 			if (mapMoving){
-				mapMoving = false;
+				const String ns = nextDoor.nextStageName;
+				SetRectBottom(player.elisRect,nextDoor.nextMapPoint);
+				nowStageName = ns;
+				map.loadStage(nowMapName,ns);
+				itemManager.loadItem(nowMapName, ns);
+				eventManager.loadEvent(ns);
 
-				player.elisRect.setCenter({ 300, 500 });
-				map.loadStage(g_gameData.mapName, L"stage01");
-				//itemManager.loadItem(mn, sn);
-				//eventManager.loadEvent(sn);
-				doors.push_back(Door({ 0, 200 }, Item::Type::Scissor));
+				loadDoors(ns);
+				
+				mapMoving = false;
 			}
 			else{
 				player.update();
@@ -545,7 +619,8 @@ public:
 				}
 
 				for (Door& d : doors){
-					if (d.hitRect.intersects(player.elisRect)){
+					if (d.hitRect.intersects(player.elisRect) && Input::KeyZ.clicked){
+						nextDoor = d;
 						mapMoving = true;
 					}
 				}
@@ -566,21 +641,37 @@ public:
 		fn.drawCenter(L"戦え\n\n[Enter]戻る", SCREEN_SIZE / 2);
 		const Point& p = camera.getCameraPos();
 		map.draw(p);
-		player.draw(p);
 		itemManager.draw(p);
 		eventManager.drawCharacter(p);
 
 		for (const Door& d : doors){
 			d.draw(p);
 		}
-
+		player.draw(p);
 		if (state == State::Event){
 			eventManager.drawEvent();
 		}
-		drawItemInventory();
+		else{
+			drawItemInventory();
+		}
 		camera.debug();
 	}
 private:
+	void loadDoors(const String stageName){
+		doors.clear();
+
+		CSVReader csv(L"data/Elis/Map/" + nowMapName + L"/" +  stageName + L".csv");
+		if (csv){
+			for (size_t y = 0; y < csv.rows; ++y){
+				if (csv.get<String>(y, 0) == L"door"){
+					Point doorPos = { csv.get<int>(y, 1), csv.get<int>(y, 2) };
+					String nextStage = csv.get<String>(y, 3);
+					Point nextPos = { csv.get<int>(y, 4), csv.get<int>(y, 5) };
+					doors.push_back(Door(doorPos, nextStage, nextPos));
+				}
+			}
+		}
+	}
 	void drawItemInventory()const{
 		for (size_t i = 0; i < 8; ++i){
 			const Point p = { 100 + 70 * i, 50 };
@@ -724,6 +815,9 @@ private:
 
 	State state = State::Playing;
 
+	String nowStageName;
+	String nowMapName;
+
 	Map map;
 	Player player;
 	MyCamera camera;
@@ -733,6 +827,7 @@ private:
 
 	bool mapMoving = false;
 	Array<Door> doors;
+	Door nextDoor;
 
 	Array<Item::Type> havingItems;
 };

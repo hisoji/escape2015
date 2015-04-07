@@ -16,7 +16,7 @@ struct GameData{
 	GameState gameState = GameState::Loading;
 	bool isRightHand = true;
 
-	String mapName = L"cave";
+	String mapName = L"house";
 	String stageName = L"stage00";
 };
 
