@@ -592,8 +592,9 @@ public:
 				map.loadStage(nowMapName,ns);
 				itemManager.loadItem(nowMapName, ns);
 				eventManager.loadEvent(ns);
-
 				loadDoors(ns);
+
+				camera.update(player.getPlayerPos(), map.getMapSize());
 				
 				mapMoving = false;
 			}
