@@ -81,7 +81,7 @@ public:
 			LOG_ERROR(L"マップ画像が読み込まれていません Map::loadStage\n");
 		}
 
-		SoundAsset(m_bgmAsset).play();
+		//SoundAsset(m_bgmAsset).play();
 	}
 	bool isFloor(int x, int y)const{
 		return m_imageTerrain[y][x] != Palette::White;
@@ -270,7 +270,7 @@ private:
 struct Item{
 	enum class Type{
 		Key,
-		Scissor,
+		JewelN,
 	};
 	static String GetItemAssetName(Item::Type type){
 		switch (type){
@@ -281,8 +281,8 @@ struct Item{
 		}
 	}
 
-	Item(Type t,Point pos){
-		type = t;
+	Item(Type t,Point pos,String map=L"house",String stage=L"stage00")
+		:type(t),mapName(map),stageName(stage){
 		assetName = GetItemAssetName(t);
 		erased = false;
 		switch (t){
@@ -300,25 +300,39 @@ struct Item{
 	Rect rect;
 	String assetName;
 	bool erased;//消す時にtrue
+	String mapName;
+	String stageName;
 };
 
 class ItemManager{
 public:
-	void loadItem(const String& mapName, const String& stageName){
-		items.clear();
+	void init(){
+		allItems.clear();
+		loadItem(L"house", L"stage00");
+		loadItem(L"house", L"stage01");
+		loadItem(L"house", L"stage02");
+		loadItem(L"house", L"stage03");
+		loadItem(L"house", L"stage04");
+		loadItem(L"house", L"stage05");
+	}
 
-		items.push_back({ Item::Type::Key, { 600, 600 } });
-		items.push_back({ Item::Type::Scissor, { 800, 600 } });
+	void selectStage(String map, String stage){
+		mapName = map;
+		stageName = stage;
 	}
 	void update(){
+		/*
 		Erase_if(items, [](const Item& i){
 			return i.erased;
 		});
+		*/
 	}
 
 	Optional<Item::Type> findItem(const Rect& playerRect = { 0, 0, 0, 0 }){
-		for (Item& i : items){
-			if (i.rect.intersects(playerRect)){
+		for (Item& i : allItems){
+			if (i.mapName == mapName && i.stageName == stageName && 
+				i.erased == false && i.rect.intersects(playerRect))
+			{
 				i.erased = true;
 				return i.type;
 			}
@@ -327,8 +341,9 @@ public:
 	}
 
 	void draw(const Point& offset = { 0, 0 })const{	
-		for (const Item &item : items){
-			if (isInCamera(item.rect.center, offset))
+		for (const Item &item : allItems){
+			if (item.mapName == mapName && item.stageName == stageName && 
+				item.erased == false && isInCamera(item.rect.center, offset))
 			{
 				const Point p = item.rect.center - offset;
 				TextureAsset(item.assetName).drawAt(p);
@@ -336,7 +351,40 @@ public:
 		}
 	}
 
+	size_t getSize()const{
+		return allItems.size();
+	}
+
 private:
+	void loadItem(const String& mapName, const String& stageName){
+		CSVReader csv(L"data/Elis/Map/" + mapName + L"/" + stageName + L".csv");
+		if (csv){
+			for (size_t y = 0; y < csv.rows; ++y){
+				if (csv.get<String>(y, 0) == L"item"){
+					if (csv.get<String>(y, 1) == L"for"){
+						int n = csv.get<int>(y, 2);
+						if (n == 0){//0除算を一時的に防ぐ
+							n == 1;
+						}
+						const Point from = { csv.get<int>(y, 4), csv.get<int>(y, 5) };
+						const Point to = { csv.get<int>(y, 7), csv.get<int>(y, 8) };
+						const Point by = (to - from) / (n - 1);
+						for (int i = 0; i < n; ++i){
+							allItems.push_back({ Item::Type::JewelN, from + by*i, mapName, stageName });
+						}
+					}
+					else{
+						Point pos = { csv.get<int>(y, 1), csv.get<int>(y, 2) };
+						allItems.push_back({ Item::Type::Key, pos, mapName, stageName });
+					}
+				}
+			}
+		}
+		else{
+			allItems.push_back({ Item::Type::Key, { 600, 600 } });
+			allItems.push_back({ Item::Type::JewelN, { 800, 600 } });
+		}
+	}
 	bool isInCamera(const Point& pos, const Point& camerapos)const
 	{
 		const int kXoffset = 300;
@@ -348,7 +396,10 @@ private:
 			&& pos.y <camerapos.y + 720 + kYoffset;
 	}
 
-	Array<Item> items;
+	Array<Item> nowItems;
+	Array<Item> allItems;
+	String stageName;
+	String mapName;
 };
 
 
@@ -577,7 +628,7 @@ public:
 		nowStageName = sn;
 		player.init({ 200, 500 });
 		map.init(mn,sn);
-		itemManager.loadItem(mn,sn);
+		itemManager.init();
 		eventManager.loadEvent(sn);
 
 		loadDoors(nowStageName);
@@ -590,7 +641,7 @@ public:
 				SetRectBottom(player.elisRect,nextDoor.nextMapPoint);
 				nowStageName = ns;
 				map.loadStage(nowMapName,ns);
-				itemManager.loadItem(nowMapName, ns);
+				itemManager.selectStage(nowMapName, ns);
 				eventManager.loadEvent(ns);
 				loadDoors(ns);
 
@@ -609,8 +660,13 @@ public:
 
 				itemManager.update();
 				if (auto p = itemManager.findItem(player.elisRect)){
-					SoundAsset(L"sndELGetItem").playMulti();
-					havingItems.push_back(p.value());
+					//SoundAsset(L"sndELGetItem").playMulti();
+					if (p.value() == Item::Type::JewelN){
+						++itemCount;
+					}
+					else{
+						havingItems.push_back(p.value());
+					}
 				}
 
 				//何か発生イベントが起こるならイベント遷移
@@ -639,7 +695,6 @@ public:
 		}
 	}
 	void draw()const{
-		fn.drawCenter(L"戦え\n\n[Enter]戻る", SCREEN_SIZE / 2);
 		const Point& p = camera.getCameraPos();
 		map.draw(p);
 		itemManager.draw(p);
@@ -656,6 +711,8 @@ public:
 			drawItemInventory();
 		}
 		camera.debug();
+		TextureAsset(L"texELMagicUpS").draw(Point(1055, 60));
+		fn.draw(Format(L"× ", itemCount,L"/",(int)itemManager.getSize()), { 1100, 50 },Palette::White);
 	}
 private:
 	void loadDoors(const String stageName){
@@ -831,4 +888,5 @@ private:
 	Door nextDoor;
 
 	Array<Item::Type> havingItems;
+	int itemCount = 0;//集めた宝石の数
 };

@@ -2,3 +2,6 @@ door,620,275,stage00,1140,255
 door,30,1220,stage02,1200,665
 door,1245,275,stage03,50,273
 door,1240,880,stage03,50,940
+item,for,5,from,180,1130,to,980,920
+item,for,5,from,865,753,to,160,586
+item,for,3,from,200,375,to,428,282

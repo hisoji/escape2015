@@ -520,7 +520,7 @@ public:
 
 	bool init(){
 		Window::Resize({ 1280, 720 });
-		Window::SetTitle(L" Elis");
+		//Window::SetTitle(L" Elis");
 
 		initState(g_gameData.gameState);
 		nowState = g_gameData.gameState;
