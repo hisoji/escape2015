@@ -57,7 +57,7 @@ private:
 	Font fn = Font(20, Typeface::Thin);
 
 	void load(){
-		FontAsset::Register(L"debugfont", 10,Typeface::Default);
+		FontAsset::Register(L"debugfont", 10, Typeface::Default);
 		//Title
 		TextureAsset::Register(L"texElisTitle", L"data/Elis/Title/title.png");
 		TextureAsset::Register(L"texElisNewgame", L"data/Elis/Title/newgame.png");

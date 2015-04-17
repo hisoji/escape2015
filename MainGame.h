@@ -81,7 +81,7 @@ public:
 			LOG_ERROR(L"マップ画像が読み込まれていません Map::loadStage\n");
 		}
 
-		//SoundAsset(m_bgmAsset).play();
+		SoundAsset(m_bgmAsset).play();
 	}
 	bool isFloor(int x, int y)const{
 		return m_imageTerrain[y][x] != Palette::White;
@@ -488,6 +488,10 @@ private:
 	bool m_isEventEnd = false;
 	Font m_TalkFont = Font(25, Typeface::Default);
 	int m_eventIndex = 0;
+
+	CSVReader eventCSV;
+	int csvPos = 0;
+
 public:
 	EventManager(){}
 
@@ -499,7 +503,8 @@ public:
 		if (csv){
 			for (int y = 0; y < csv.rows; ++y)
 			{
-				if (csv.get<String>(y, 0) == L"event"){
+				const String str = csv.get<String>(y, 0);
+				if (str == L"event"){
 					EventInfo item;
 					item.filename = csv.get<String>(y, 1).lower();
 					item.type = EventType::TalkEvent;
@@ -507,7 +512,7 @@ public:
 					SetRectBottom(item.eventArea, { csv.get<int>(y, 2), csv.get<int>(y, 3) });
 					m_events.push_back(item);
 				}
-				else if (csv.get<String>(y, 0) == L"autoevent"){
+				else if (str == L"autoevent"){
 					EventInfo item;
 					item.filename = csv.get<String>(y, 1).lower();
 					item.type = EventType::AutoEvent;
@@ -515,7 +520,7 @@ public:
 					SetRectBottom(item.eventArea, { csv.get<int>(y, 2), csv.get<int>(y, 3) });
 					m_events.push_back(item);
 				}
-				else if (csv.get<String>(y, 0) == L"autostart"){//巨大な判定で強制的に触れさせる
+				else if (str == L"autostart"){//巨大な判定で強制的に触れさせる
 					EventInfo item;
 					item.filename = csv.get<String>(y, 1).lower();
 					item.flagName = csv.get<String>(y, 2).lower();
@@ -533,9 +538,19 @@ public:
 	//イベント処理(引数を追加していい。考えられるもの...プレイヤー位置、会話ボタンが押されたか)
 	void update()
 	{
-		if (Input::KeyZ.clicked)
-		{
-			m_isEventEnd = true;
+		if (m_events[m_eventIndex].type == EventType::AutoStart){
+			if (Input::KeyZ.clicked){
+				++csvPos;
+				if (csvPos >= eventCSV.rows){
+					m_isEventEnd = true;
+				}
+			}
+		}
+		else{
+			if (Input::KeyZ.clicked)
+			{
+				m_isEventEnd = true;
+			}
 		}
 	}
 
@@ -550,32 +565,34 @@ public:
 	{
 		bool flag = false;
 
+		const auto setStart = [&](int i){
+			flag = true;
+			m_eventIndex = i;
+		};
+
 		for (size_t i = 0; i < m_events.size(); ++i)
 		{
 			if (m_events[i].eventArea.intersects(playerRect))
 			{
-				if (m_events[i].type == EventType::TalkEvent
-					&& isClickedTalkButton
-					)
+				if (m_events[i].type == EventType::TalkEvent && isClickedTalkButton)
 				{
-					flag = true;
-					m_eventIndex = i;
+					setStart(i);
 					break;
 				}
-				else if (m_events[i].type == EventType::AutoEvent
-					&& !m_events[i].readed)
+				else if (m_events[i].type == EventType::AutoEvent && !m_events[i].readed)
 				{
-					flag = true;
-					m_eventIndex = i;
+					setStart(i);
 					m_events[i].readed = true;
 					break;
 				}
-				else if (m_events[i].type == EventType::AutoStart
-					&& flags.get(m_events[i].flagName) == false)
+				else if (m_events[i].type == EventType::AutoStart && flags.get(m_events[i].flagName) == false)
 				{
-					flag = true;
-					m_eventIndex = i;
+					setStart(i);
 					m_events[i].readed = true;
+					eventCSV.open(L"data/Elis/Map/house/" + m_events[i].filename + L".csv");
+					if (!eventCSV){
+						LOG_ERROR(L"存在しないcsvです");
+					}
 
 					flags.set(m_events[i].flagName, true);
 					break;
@@ -608,9 +625,27 @@ public:
 
 	void drawEvent() const
 	{
-		Rect(50, 50, 1180, 300).draw(Palette::Lightslategray);
-		Rect(50, 50, 1180, 300).drawFrame(10.0, 0.0, Palette::Black);
-		m_TalkFont(m_events[m_eventIndex].filename).draw(100, 100, Palette::Black);
+		const auto drawTalkWindow = [](){
+			Rect(50, 50, 1180, 300).draw(Palette::Lightslategray);
+			Rect(50, 50, 1180, 300).drawFrame(10.0, 0.0, Palette::Black);
+		};
+
+		if (m_events[m_eventIndex].type == EventType::AutoStart){
+			drawTalkWindow();
+			const String str = eventCSV.get<String>(csvPos, 0);
+			const int maxChar = 29;
+			m_TalkFont(str.substr(0, maxChar)).draw(100, 100, Palette::Black);
+			if (str.length >= maxChar){
+				m_TalkFont(str.substr(maxChar, maxChar)).draw(100, 150, Palette::Black);
+			}
+			if (str.length >= maxChar*2){
+				m_TalkFont(str.substr(maxChar*2, maxChar)).draw(100, 200, Palette::Black);
+			}
+		}
+		else{
+			drawTalkWindow();
+			m_TalkFont(m_events[m_eventIndex].filename).draw(100, 100, Palette::Black);
+		}
 		//LOG_ERROR(m_events[m_eventIndex].filename);
 	}
 };
@@ -660,7 +695,7 @@ public:
 
 				itemManager.update();
 				if (auto p = itemManager.findItem(player.elisRect)){
-					//SoundAsset(L"sndELGetItem").playMulti();
+					SoundAsset(L"sndELGetItem").playMulti();
 					if (p.value() == Item::Type::JewelN){
 						++itemCount;
 					}
